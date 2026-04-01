@@ -12,7 +12,7 @@ jobs:
       - name: Instalar Ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu wget unzip
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
       - name: Baixar Kernel (Discord Direct)
         run: |
@@ -23,41 +23,39 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Link Oficial GitLab)
+      - name: Aplicar Patches SUSFS (O MESMO DE ANTES)
         run: |
-          # Clonando do GitLab que é a fonte mais estável para o SUSFS
+          # Clonando exatamente como estava na build de 20 minutos
           git clone https://gitlab.com/cyluun/susfs4kernel.git
-          
-          # Aplicando na base 5.15 do seu A14
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel (A14 5G - Android 15)
+      - name: Compilar Kernel (Android 15 / A14 5G)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           
-          # Vacina para não travar e compressão para o seu init_boot de 16MB
+          # Ajustes para o seu init_boot de 16MB
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
           make O=out -j$(nproc)
 
-      - name: Gerar Arquivos para Flash
+      - name: Gerar Arquivo Image
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
             cp out/arch/arm64/boot/Image ./Image-A14-GKI
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro na compilação. Veja os logs acima."
+            echo "Erro: Compilação falhou."
             exit 1
           fi
 
-      - name: Upload Artifact
+      - name: Enviar Kernel Pronto
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Android15-Diego
+          name: Kernel-A14-Final-Diego
           path: |
             ./Image-A14-GKI
             ./Image.lz4
