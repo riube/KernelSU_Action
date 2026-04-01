@@ -23,14 +23,10 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Download Direto Anti-Erro)
+      - name: Aplicar Patches SUSFS (Link que funcionou)
         run: |
-          # Baixando o ZIP direto para não pedir senha de Git
-          wget https://github.com/sidex15/susfs4kernel/archive/refs/heads/main.zip
-          unzip main.zip
-          mv susfs4kernel-main susfs4kernel
-          
-          # Aplicando os patches na base 5.15
+          # Usando o link que a gente usou na build de 20 minutos
+          git clone https://github.com/tiann/susfs4kernel.git
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
@@ -39,9 +35,12 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
+          
+          # Desativa o BTF para não dar erro de espaço
           scripts/config --file out/.config -d DEBUG_INFO_BTF
-          # Força a compressão que cabe no seu init_boot de 16MB
+          # Força a compressão LZ4 para caber no seu init_boot
           scripts/config --file out/.config -e KERNEL_LZ4
+          
           make O=out -j$(nproc)
 
       - name: Gerar Arquivos para Flash
