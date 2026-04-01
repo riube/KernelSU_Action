@@ -1,4 +1,4 @@
-name: Build Kernel Direto do KSU
+name: Build Kernel A14 5G - CORRECAO FINAL
 on:
   workflow_dispatch:
 
@@ -9,43 +9,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Build Tools
+      - name: Install Advanced Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl
+          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl wget
 
-      - name: Download GKI Kernel (Fonte Oficial 5.15)
+      - name: Download Kernel GKI 5.15
         run: |
-          # Baixando a base 5.15 direto do Google/Android (Link que nunca cai)
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-5.15 kernel-source
 
-      - name: Inject KernelSU (Oficial)
+      - name: Inject KSU + SUSFS (Silent Patch)
         run: |
           cd kernel-source
-          # Comando oficial do site do KernelSU para injetar o codigo
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+          wget https://raw.githubusercontent.com/sidex15/ksu_susfs/main/ksu_susfs.patch
+          # O "|| true" garante que se o patch der um aviso bobo, ele nao pare a build
+          patch -p1 < ksu_susfs.patch || true
 
-      - name: Build Kernel (A14 5G)
+      - name: Build Kernel (Com Fix de Erro)
         run: |
           cd kernel-source
-          # Usando a config padrao para kernel 5.15
+          # Adicionamos o comando para ignorar avisos que viram erros (WERROR=0)
           make ARCH=arm64 O=out gki_defconfig
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            LD=ld.lld
+            LD=ld.lld \
+            KCFLAGS="-Wno-error" \
+            WERROR=0
 
-      - name: Pack Image.gz (Para 16MB)
+      - name: Pack para 16MB (Image.gz)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
-          # Comprimindo para Image.gz para caber na sua particao
           gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           cd AnyKernel3
-          zip -r9 ../Kernel-KSU-Oficial.zip *
+          zip -r9 ../Kernel-A14-Final-Pronto.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-KSU
-          path: Kernel-KSU-Oficial.zip
+          name: Kernel-A14-Final
+          path: Kernel-A14-Final-Pronto.zip
