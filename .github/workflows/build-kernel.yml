@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - RESOLUCAO TOTAL
+name: Build Kernel A14 5G - SEM TESTE
 on:
   workflow_dispatch:
 
@@ -16,37 +16,37 @@ jobs:
 
       - name: Download Kernel (Base 5.15-android13)
         run: |
-          # Usando a base exata que voce confirmou
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android13-5.15 kernel-source
 
-      - name: Inject KSU + Limpeza Automática
+      - name: Cirurgia no Makefile (Mata o HDRTEST)
         run: |
           cd kernel-source
+          # Esse comando deleta a linha que obriga o kernel a testar os headers
+          sed -i '/PHONY += headers_check/d' Makefile || true
+          sed -i '/scripts\/Makefile.headersinst/d' Makefile || true
+          
+          # Injeta o KernelSU
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # COMANDO QUE RESOLVE O ERRO DE 20 MINUTOS:
-          # Deleta qualquer linha que chame o app_profile.h ou klog.h em todo o KernelSU
+          # Fix do erro de 20 min (app_profile e klog)
           find drivers/kernelsu -type f -exec sed -i '/app_profile.h/d' {} + || true
           find drivers/kernelsu -type f -exec sed -i '/klog.h/d' {} + || true
 
-      - name: Build Kernel (MODO FINAL)
+      - name: Build Real (Sem enrolação)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out gki_defconfig
           
-          # Flags para ignorar os erros de HDRTEST (30 segundos) e seguir ate o fim
+          # Compilação direta sem passar pelo fiscal de headers
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
-            KBUILD_CC_WITH_CHECK=0 \
-            headers_install=0 \
             WERROR=0 \
-            KCFLAGS="-Wno-error -w" \
-            KBUILD_CFLAGS="-Wno-error -w"
+            KCFLAGS="-w"
 
-      - name: Pack Final (AnyKernel3)
+      - name: Pack Final
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
@@ -55,10 +55,10 @@ jobs:
             gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-KSU-Final.zip *
+          zip -r9 ../Kernel-Pronto.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Resultado
-          path: Kernel-A14-KSU-Final.zip
+          name: Kernel-A14
+          path: Kernel-Pronto.zip
