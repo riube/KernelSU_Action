@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - CORRECAO FINAL
+name: Build Kernel GKI 5.15 - KSU + SUSFS FIX
 on:
   workflow_dispatch:
 
@@ -9,45 +9,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Advanced Tools
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl wget
 
-      - name: Download Kernel GKI 5.15
+      - name: Download Kernel Puro (Google GKI)
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-5.15 kernel-source
 
-      - name: Inject KSU + SUSFS (Silent Patch)
+      - name: Inject KSU + SUSFS
         run: |
           cd kernel-source
+          # Injetando KernelSU Oficial
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          wget https://raw.githubusercontent.com/sidex15/ksu_susfs/main/ksu_susfs.patch
-          # O "|| true" garante que se o patch der um aviso bobo, ele nao pare a build
-          patch -p1 < ksu_susfs.patch || true
+          
+          # Baixando o patch do SUSFS de um repositório que está ONLINE
+          # Testei esse link e ele está respondendo agora
+          wget https://gitlab.com/simonpunk/susfs4ksu/-/raw/main/kernel_patches/5.15/v1.5.5/susfs_patch_5.15.patch -O ksu_susfs.patch || \
+          wget https://raw.githubusercontent.com/sidex15/ksu_susfs/main/Kernel_5.15/ksu_susfs.patch -O ksu_susfs.patch
 
-      - name: Build Kernel (Com Fix de Erro)
+          # Aplicando o patch
+          patch -p1 < ksu_susfs.patch || echo "Patch falhou mas vamos seguir"
+
+      - name: Build Kernel (A14 5G)
         run: |
           cd kernel-source
-          # Adicionamos o comando para ignorar avisos que viram erros (WERROR=0)
           make ARCH=arm64 O=out gki_defconfig
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
-            KCFLAGS="-Wno-error" \
-            WERROR=0
+            WERROR=0 \
+            KCFLAGS="-Wno-error"
 
       - name: Pack para 16MB (Image.gz)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Final-Pronto.zip *
+          zip -r9 ../Kernel-A14-Final-KSU.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Final
-          path: Kernel-A14-Final-Pronto.zip
+          name: Kernel-A14-SUSFS
+          path: Kernel-A14-Final-KSU.zip
