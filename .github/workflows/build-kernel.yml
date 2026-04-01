@@ -12,30 +12,35 @@ jobs:
       - name: Instalar Ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu wget unzip
 
       - name: Baixar Kernel (Discord Direct)
         run: |
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
           tar -xf kernel.tar.gz
 
-      - name: KernelSU Next
+      - name: Injetar KernelSU Next
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: SUSFS (Link Público)
+      - name: Aplicar Patches SUSFS (Download Direto Anti-Erro)
         run: |
-          git clone https://github.com/sidex15/susfs4kernel.git
+          # Baixando o ZIP direto para não pedir senha de Git
+          wget https://github.com/sidex15/susfs4kernel/archive/refs/heads/main.zip
+          unzip main.zip
+          mv susfs4kernel-main susfs4kernel
+          
+          # Aplicando os patches na base 5.15
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel
+      - name: Compilar Kernel (Otimizado A14)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           scripts/config --file out/.config -d DEBUG_INFO_BTF
-          # Força a compressão LZ4 que a Samsung usa no init_boot
+          # Força a compressão que cabe no seu init_boot de 16MB
           scripts/config --file out/.config -e KERNEL_LZ4
           make O=out -j$(nproc)
 
@@ -43,17 +48,16 @@ jobs:
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
             cp out/arch/arm64/boot/Image ./Image-A14-GKI
-            # Gera também a versão comprimida se precisar
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro na compilação."
+            echo "Erro: A compilação falhou."
             exit 1
           fi
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Android15-initboot
+          name: Kernel-A14-Android15-Diego
           path: |
             ./Image-A14-GKI
             ./Image.lz4
