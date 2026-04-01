@@ -12,55 +12,67 @@ jobs:
       - name: Instalar Ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu wget unzip
 
-      - name: Baixar e Preparar Kernel
+      - name: Baixar e Organizar Kernel
         run: |
+          # Baixa o seu Kernel de 244MB
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
-          tar -xf kernel.tar.gz
-          # Garante que estamos na pasta onde o Makefile está
-          if [ -d "Kernel" ]; then mv Kernel/* . && rm -rf Kernel; fi
-
+          
+          # Extrai tudo em uma pasta temporária e move tudo para a raiz
+          mkdir temp_kernel
+          tar -xf kernel.tar.gz -C temp_kernel
+          cp -r temp_kernel/* . || true
+          # Se houver uma pasta interna com nome de 'Kernel', move o que tem dentro dela também
+          find . -maxdepth 3 -name "gki_defconfig"
+          
       - name: Injetar KernelSU Next
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Injetar SUSFS (Download Direto)
+      - name: Aplicar Patches SUSFS (Via Raw - Sem Login)
         run: |
           mkdir -p fs/susfs
+          # Puxando os arquivos brutos para não dar erro de Username no Git
           curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o susfs.patch
           curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
           patch -p1 < susfs.patch || true
           patch -p1 < sys.patch || true
 
-      - name: Compilar Kernel (A14 5G - Resolvido)
+      - name: Compilar Kernel (Agora Vai!)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          # Limpeza profunda para não dar erro de config
-          make clean && make mrproper
-          make O=out gki_defconfig
           
-          # Vacina dos 20 minutos
+          # Procura onde o gki_defconfig foi parar e usa o caminho real
+          CONFIG_PATH=$(find . -name "gki_defconfig" | head -n 1)
+          CONFIG_FILE=$(basename $CONFIG_PATH)
+          CONFIG_DIR=$(dirname $CONFIG_PATH)
+          
+          echo "Usando config em: $CONFIG_PATH"
+          
+          make O=out ARCH=arm64 $CONFIG_FILE
+          
+          # A vacina dos 20 minutos
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
-          make O=out -j$(nproc)
+          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
 
-      - name: Gerar Arquivos (init_boot 16MB)
+      - name: Gerar Arquivos para Flash
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image ./Image
+            cp out/arch/arm64/boot/Image ./Image-Final
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: A compilação falhou no Makefile."
+            echo "Erro: A compilação não gerou a Image."
             exit 1
           fi
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Diego-Final
+          name: Kernel-A14-Diego-Pronto
           path: |
-            ./Image
+            ./Image-Final
             ./Image.lz4
