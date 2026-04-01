@@ -14,9 +14,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git clang lld
 
-      - name: Download Kernel (Samsung Official Mirror)
+      - name: Download Kernel (Public Mirror)
         run: |
-          git clone --depth=1 https://github.com/Samsung-A14x/android_kernel_samsung_a14x kernel-source
+          git clone --depth=1 https://gitlab.com/mrsat_64/android_kernel_samsung_a14x kernel-source
 
       - name: Setup KernelSU & SUSFS
         run: |
@@ -36,15 +36,15 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             LD=ld.lld
 
-      - name: Pack Result
+      - name: Pack AnyKernel3
         run: |
           git clone https://github.com/osm0sis/AnyKernel3
           cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
           cd AnyKernel3
-          zip -r9 ../AnyKernel3-A14-KSU.zip *
+          zip -r9 ../Kernel-A14-KSU.zip *
 
       - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Final
-          path: AnyKernel3-A14-KSU.zip
+          name: Kernel-Final
+          path: Kernel-A14-KSU.zip
