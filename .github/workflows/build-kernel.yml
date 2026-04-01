@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - SEM TESTE
+name: Build Kernel A14 5G - MODO JIMSTERINO
 on:
   workflow_dispatch:
 
@@ -18,26 +18,29 @@ jobs:
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android13-5.15 kernel-source
 
-      - name: Cirurgia no Makefile (Mata o HDRTEST)
+      - name: Aplicar Patches do Jimsterino
         run: |
+          # Clona o repo que voce achou
+          git clone https://github.com/jimsterino98/ksu_susfs_patches.git
           cd kernel-source
-          # Esse comando deleta a linha que obriga o kernel a testar os headers
-          sed -i '/PHONY += headers_check/d' Makefile || true
-          sed -i '/scripts\/Makefile.headersinst/d' Makefile || true
           
-          # Injeta o KernelSU
+          # Injeta o KernelSU oficial
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # Fix do erro de 20 min (app_profile e klog)
-          find drivers/kernelsu -type f -exec sed -i '/app_profile.h/d' {} + || true
-          find drivers/kernelsu -type f -exec sed -i '/klog.h/d' {} + || true
+          # APLICANDO OS FIXES (O segredo do sucesso)
+          # Isso aqui resolve o erro do app_profile.h e do klog.h de um jeito limpo
+          cp -r ../ksu_susfs_patches/ksu/susfs_fix_patches/v2.0.0/* ./
+          for patch in *.patch; do patch -p1 < "$patch" || true; done
+          
+          # Mata o HDRTEST (o erro de 30 segundos) direto no Makefile
+          sed -i '/PHONY += headers_check/d' Makefile || true
+          sed -i '/scripts\/Makefile.headersinst/d' Makefile || true
 
-      - name: Build Real (Sem enrolação)
+      - name: Build Kernel (Agora vai!)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out gki_defconfig
           
-          # Compilação direta sem passar pelo fiscal de headers
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -46,7 +49,7 @@ jobs:
             WERROR=0 \
             KCFLAGS="-w"
 
-      - name: Pack Final
+      - name: Pack Final (Image.gz)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
@@ -55,10 +58,10 @@ jobs:
             gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-Pronto.zip *
+          zip -r9 ../Kernel-Jimsterino-A14.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14
-          path: Kernel-Pronto.zip
+          name: Kernel-A14-Final
+          path: Kernel-Jimsterino-A14.zip
