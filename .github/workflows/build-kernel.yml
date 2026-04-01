@@ -16,7 +16,7 @@ jobs:
 
       - name: Checkout Kernel Source
         run: |
-          git clone --depth=1 -b u7 https://github.com/HunterGaming1212/android_kernel_samsung_a14x kernel-source
+          git clone --depth=1 -b u7 https://github.com/Samsung-A14x/android_kernel_samsung_a14x kernel-source
 
       - name: Setup KernelSU & SUSFS
         run: |
