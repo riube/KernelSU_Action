@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - FIX FINAL
+name: Build Kernel A14 5G - MODO WILD
 on:
   workflow_dispatch:
 
@@ -12,49 +12,47 @@ jobs:
       - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl
+          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl patch
 
       - name: Download Kernel (Base 5.15-android13)
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android13-5.15 kernel-source
 
-      - name: Injetar Patches e KSU
+      - name: Aplicar Patches da WildKernels
         run: |
+          # 1. Clona o repo exato do seu print
+          git clone --depth=1 https://github.com/WildKernels/kernel_patches.git wild_patches
+          
           cd kernel-source
-          # 1. Instala o KernelSU
+          # 2. Injeta o KernelSU
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # 2. RESOLVE ERRO DE 20 MINUTOS (O que estava no repo dele)
-          # Criamos os headers que o KernelSU 5.15 exige
-          mkdir -p drivers/kernelsu/uapi
-          echo "#ifndef _UAPI_KSU_APP_PROFILE_H" > drivers/kernelsu/uapi/app_profile.h
-          echo "#define _UAPI_KSU_APP_PROFILE_H" >> drivers/kernelsu/uapi/app_profile.h
-          echo "#endif" >> drivers/kernelsu/uapi/app_profile.h
+          # 3. Aplica os patches da pasta v2.0.0 que voce mostrou no print
+          # Esses resolvem o erro de 20 minutos (app_profile, klog, etc)
+          cp ../wild_patches/ksu/susfs_fix_patches/v2.0.0/*.patch ./
+          for p in *.patch; do patch -p1 < "$p" || true; done
           
-          # 3. MATA O HDRTEST (O erro de 30 segundos dos seus prints)
-          sed -i 's/docker-test//g' Makefile || true
+          # 4. Aplica o patch principal de ocultação
+          patch -p1 < ../wild_patches/69_hide_stuff.patch || true
+          
+          # 5. Mata o fiscal de 30 segundos (HDRTEST)
           sed -i '/PHONY += headers_check/d' Makefile || true
           sed -i '/scripts\/Makefile.headersinst/d' Makefile || true
 
-      - name: Build Turbo (Pulando validações)
+      - name: Build Real (KSU + SUSFS)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out gki_defconfig
-          
-          # Usando flags de força bruta para não parar em nenhum erro bobo
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
             KBUILD_CC_WITH_CHECK=0 \
-            headers_install=0 \
-            CHECK_HEADERS=0 \
             WERROR=0 \
-            KCFLAGS="-w" \
-            KBUILD_CFLAGS="-w"
+            KCFLAGS="-w"
 
-      - name: Pack Final (Image.gz)
+      - name: Pack Final
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
@@ -63,10 +61,10 @@ jobs:
             gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-KSU-Final.zip *
+          zip -r9 ../Kernel-A14-Wild.zip *
 
       - name: Upload
-        uses: upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Download
-          path: Kernel-A14-KSU-Final.zip
+          name: Kernel-A14-Pronto
+          path: Kernel-A14-Wild.zip
