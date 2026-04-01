@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G
+name: Build Kernel A14 5G Final
 on:
   workflow_dispatch:
 
@@ -9,45 +9,52 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Instalar Dependencias
+      - name: Instalar Ferramentas de Compilação
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf aarch64-linux-gnu-gcc
 
-      - name: Baixar Kernel Original
+      - name: Baixar Kernel Original (Link Direto)
         run: |
-          curl -L "https://gofile.io/d/n3qWKY" -o kernel.tar.gz
-          tar -xf kernel.tar.gz || echo "Erro no tar, tentando baixar direto..."
-          # Se o GoFile barrar o download direto, ele vai tentar de novo aqui
-          if [ ! -d "kernel" ]; then
-            curl -L "https://gofile.io/d/n3qWKY" -o kernel.tar.gz
-            tar -xf kernel.tar.gz
-          fi
+          # Usando seu link do Limewire para baixar os 256MB reais
+          curl -L "https://limewire.com/d/h1JDt" -o kernel.tar.gz
+          tar -xf kernel.tar.gz
+          echo "Download concluído. Verificando pasta do kernel..."
+          ls -R | grep -m 1 "Makefile"
 
-      - name: Configurar KernelSU Next
+      - name: Injetar KernelSU Next
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS
+      - name: Aplicar Patches SUSFS (Disfarce)
         run: |
           git clone https://gitlab.com/burasaka/susfs4kernel.git
+          # Aplicando patches para a base 5.15 do seu A14
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel
+      - name: Compilar Kernel (Vacina Anti-Erro 12min)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
+          
+          # DESATIVA O BTF: Isso impede que a build trave na metade
           scripts/config --file out/.config -d DEBUG_INFO_BTF
+          
           make O=out -j$(nproc)
 
-      - name: Preparar Image Final
+      - name: Gerar Arquivo Final
         run: |
-          cp out/arch/arm64/boot/Image ./Image-A14-Final
+          if [ -f out/arch/arm64/boot/Image ]; then
+            cp out/arch/arm64/boot/Image ./Image-A14-Final-KSU-Next
+          else
+            echo "Erro: A compilação falhou. Verifique os logs acima."
+            exit 1
+          fi
 
-      - name: Upload
+      - name: Enviar Kernel Pronto
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A15-Pronto
-          path: ./Image-A14-Final
+          name: Kernel-A15-Diego
+          path: ./Image-A14-Final-KSU-Next
