@@ -14,54 +14,60 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Baixar Kernel (O seu de 244MB)
+      - name: Extração Forçada (Resolve Erro de Pasta)
         run: |
+          # Baixa o seu kernel de 244MB
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
           tar -xf kernel.tar.gz
-          # Pega a pasta onde o Makefile está e traz tudo pra cá
-          ROOT_DIR=$(find . -name "Makefile" -exec dirname {} \; | head -n 1)
-          mv $ROOT_DIR/* . || true
-
-      - name: Injetar KernelSU Next e SUSFS (O MESMO QUE FUNCIONOU)
-        run: |
-          # Injetando o KSU Next
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
-          # Baixando SUSFS via RAW (Isso evita o erro de login das imagens 9ef30c/9efb84)
+          # Acha onde está o Makefile e joga TUDO na raiz pra não dar erro de config
+          K_DIR=$(find . -maxdepth 3 -name "Makefile" -exec dirname {} \; | head -n 1)
+          mv $K_DIR/* . || true
+
+      - name: Injetar KernelSU Next
+        run: |
+          # Setup via RAW (Sem git clone)
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+
+      - name: Aplicar SUSFS (Sem Erro de Login - 100% RAW)
+        run: |
+          # Resolve o erro do print 9efb84 (NUNCA mais usa git clone aqui)
           mkdir -p fs/susfs
           curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o fs/susfs/susfs.patch
-          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys_patch.patch
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
           
-          # Aplicando patches
           patch -p1 < fs/susfs/susfs.patch || true
-          patch -p1 < sys_patch.patch || true
+          patch -p1 < sys.patch || true
 
-      - name: Compilar (A14 5G - Android 15)
+      - name: Compilar Kernel (A Build de 20 Minutos - Sem Erro de Disco)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Força o GitHub a usar o caminho real do arquivo que ele não estava achando
-          CONFIG_FILE=$(find arch/arm64/configs/ -name "gki_defconfig" | head -n 1)
-          make O=out $(basename $CONFIG_FILE)
+          # Limpa build anterior se houver
+          make clean && make mrproper
           
-          # Desativa o BTF (Pra passar dos 20 minutos sem erro de disco)
+          # Acha a config exata dentro da pasta arch
+          CONF=$(find arch/arm64/configs/ -name "gki_defconfig" | head -n 1)
+          make O=out $(basename $CONF)
+          
+          # VACINA DOS 20 MINUTOS: Desativa o BTF pra build não morrer por falta de espaço
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
           make O=out -j$(nproc)
 
-      - name: Gerar Arquivo Final
+      - name: Gerar Arquivo Image
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: Kernel não compilou."
+            echo "Erro: A compilação falhou nos drivers."
             exit 1
           fi
 
-      - name: Upload
+      - name: Enviar Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Diego-Final
+          name: Kernel-A14-Diego-Final-OK
           path: ./Image.lz4
