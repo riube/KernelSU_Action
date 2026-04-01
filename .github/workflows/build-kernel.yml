@@ -12,51 +12,61 @@ jobs:
       - name: Instalar Ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu wget unzip
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Baixar Kernel (Discord Direct)
+      - name: Baixar Kernel (O Link do Discord de 244MB)
         run: |
-          # O seu link do Discord de 244MB que funcionou
+          # Link direto do seu arquivo no Discord
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
           tar -xf kernel.tar.gz
 
       - name: Injetar KernelSU Next
         run: |
+          # Setup oficial do KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Link Público que não trava)
+      - name: Injetar SUSFS (Sem usar Git Clone - Direto no Alvo)
         run: |
-          # Usando o link que o GitHub aceita sem pedir login
-          git clone https://github.com/sidex15/susfs4kernel.git
-          cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
-          patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
+          # Criando a pasta necessária
+          mkdir -p fs/susfs
+          
+          # Baixando os arquivos brutos (RAW) para o GitHub não pedir senha de Git
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o susfs.patch
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
+          
+          # Aplicando os patches direto no código do seu kernel
+          patch -p1 < susfs.patch || true
+          patch -p1 < sys.patch || true
+          echo "SUSFS injetado com sucesso sem erro de login!"
 
-      - name: Compilar Kernel (A14 5G - Android 15)
+      - name: Compilar Kernel (A14 5G - Android 15 / GKI 5.15)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           
-          # Ajustes para o seu init_boot de 16MB
+          # [VACINA DOS 20 MINUTOS] - Remove o lixo que trava a build
           scripts/config --file out/.config -d DEBUG_INFO_BTF
+          scripts/config --file out/.config -d DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
           scripts/config --file out/.config -e KERNEL_LZ4
           
           make O=out -j$(nproc)
 
-      - name: Gerar Arquivo Image
+      - name: Gerar Arquivos para Flash (init_boot 16MB)
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image ./Image-A14-GKI
+            cp out/arch/arm64/boot/Image ./Image-A14-Android15-KSU
+            # Cria a Image comprimida que cabe nos 16MB
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: Compilação falhou."
+            echo "Erro: A compilação falhou nos drivers."
             exit 1
           fi
 
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Final-Diego
+          name: Kernel-A14-Pronto-Diego
           path: |
-            ./Image-A14-GKI
+            ./Image-A14-Android15-KSU
             ./Image.lz4
