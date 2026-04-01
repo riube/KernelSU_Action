@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G 100% Funcional
+name: Build Kernel A14 5G ZIP-Method
 on:
   workflow_dispatch:
 
@@ -14,10 +14,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git clang lld
 
-      - name: Download Kernel (Link Publico Garantido)
+      - name: Download Kernel (Direct ZIP)
         run: |
-          # Usando o mirror que nao pede login
-          git clone --depth=1 https://github.com/D-S-Y/android_kernel_samsung_a14x kernel-source
+          # Baixando como ZIP para ignorar erro de Username/Senha
+          wget https://github.com/D-S-Y/android_kernel_samsung_a14x/archive/refs/heads/u7.zip
+          unzip u7.zip
+          mv android_kernel_samsung_a14x-u7 kernel-source
 
       - name: Setup KernelSU & SUSFS
         run: |
@@ -37,15 +39,15 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             LD=ld.lld
 
-      - name: Pack AnyKernel3
+      - name: Pack Result
         run: |
           git clone https://github.com/osm0sis/AnyKernel3
           cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Android15-KSU.zip *
+          zip -r9 ../Kernel-A14-KSU-Final.zip *
 
       - name: Upload Final
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Final
-          path: Kernel-A14-Android15-KSU.zip
+          name: Kernel-A14
+          path: Kernel-A14-KSU-Final.zip
