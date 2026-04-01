@@ -14,35 +14,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Baixar Kernel (244MB do Discord)
+      - name: Baixar Kernel (O seu de 244MB)
         run: |
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
           tar -xf kernel.tar.gz
-          [ -d "Kernel" ] && mv Kernel/* . || true
+          # Pega a pasta onde o Makefile está e traz tudo pra cá
+          ROOT_DIR=$(find . -name "Makefile" -exec dirname {} \; | head -n 1)
+          mv $ROOT_DIR/* . || true
 
-      - name: Injetar KernelSU Next
+      - name: Injetar KernelSU Next e SUSFS (O MESMO QUE FUNCIONOU)
         run: |
+          # Injetando o KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-
-      - name: Aplicar SUSFS (O JEITO QUE NÃO PEDE SENHA)
-        run: |
-          # Criando a pasta na mão
-          mkdir -p fs/susfs
-          # Baixando o código bruto direto do servidor, sem usar 'git clone'
-          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o fs/susfs/susfs.patch
-          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
           
-          # Aplicando os patches no seu kernel 5.15
+          # Baixando SUSFS via RAW (Isso evita o erro de login das imagens 9ef30c/9efb84)
+          mkdir -p fs/susfs
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o fs/susfs/susfs.patch
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys_patch.patch
+          
+          # Aplicando patches
           patch -p1 < fs/susfs/susfs.patch || true
-          patch -p1 < sys.patch || true
+          patch -p1 < sys_patch.patch || true
 
-      - name: Compilar Kernel (A Build de 20 Minutos)
+      - name: Compilar (A14 5G - Android 15)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          make O=out gki_defconfig
           
-          # Vacina contra estouro de disco (BTF Off)
+          # Força o GitHub a usar o caminho real do arquivo que ele não estava achando
+          CONFIG_FILE=$(find arch/arm64/configs/ -name "gki_defconfig" | head -n 1)
+          make O=out $(basename $CONFIG_FILE)
+          
+          # Desativa o BTF (Pra passar dos 20 minutos sem erro de disco)
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
@@ -53,7 +56,7 @@ jobs:
           if [ -f out/arch/arm64/boot/Image ]; then
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: A compilação falhou."
+            echo "Erro: Kernel não compilou."
             exit 1
           fi
 
