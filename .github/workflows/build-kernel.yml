@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - SEM ERRO BTF
+name: Build Kernel Samsung via Release
 on:
   workflow_dispatch:
 
@@ -9,45 +9,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Tools (KIT COMPLETO)
+      - name: Instalar Ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl patch libcap-dev
-          
-      - name: Download Kernel (Base 5.15-android13)
-        run: |
-          git clone --depth=1 https://android.googlesource.com/kernel/common -b android13-5.15 kernel-source
+          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl patch
 
-      - name: Aplicar KSU + WildKernels
+      - name: Baixar Kernel do Release
         run: |
-          git clone --depth=1 https://github.com/WildKernels/kernel_patches.git wild_patches
+          # Esse comando baixa o arquivo que voce subiu no Release v1.0
+          curl -L -o Kernel.tar.gz https://github.com/${{ github.repository }}/releases/download/v1.0/Kernel.tar.gz
+          mkdir kernel-source
+          tar -xf Kernel.tar.gz -C kernel-source
+
+      - name: Injetar KSU + Patches SUSFS
+        run: |
+          git clone --depth=1 https://github.com/WildKernels/kernel_patches.git patches
           cd kernel-source
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # Aplica os patches do seu print
-          cp ../wild_patches/ksu/susfs_fix_patches/v2.0.0/*.patch ./
+          # Aplica os patches v2.0.0 (JIMSTERINO/WILDJAMES)
+          cp ../patches/ksu/susfs_fix_patches/v2.0.0/*.patch ./
           for p in *.patch; do patch -p1 < "$p" || true; done
-          patch -p1 < ../wild_patches/69_hide_stuff.patch || true
-          
-          # Mata o fiscal de 30 segundos e desativa o BTF que deu erro no print
-          sed -i '/PHONY += headers_check/d' Makefile || true
-          sed -i '/scripts\/Makefile.headersinst/d' Makefile || true
-          # Desativa o gerador de BTF para nao travar no 'resolve_btfids'
-          sed -i 's/CONFIG_DEBUG_INFO_BTF=y/CONFIG_DEBUG_INFO_BTF=n/g' arch/arm64/configs/gki_defconfig || true
+          patch -p1 < ../patches/69_hide_stuff.patch || true
 
-      - name: Build Turbo (Sem Travas)
+      - name: Build Turbo
         run: |
           cd kernel-source
-          make ARCH=arm64 O=out gki_defconfig
+          # Tenta o defconfig da Samsung ou o GKI
+          make ARCH=arm64 O=out a14x_defconfig || make ARCH=arm64 O=out gki_defconfig
           
-          # Forçando a desativação do BTF no comando de build também
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
-            KBUILD_CC_WITH_CHECK=0 \
-            CONFIG_DEBUG_INFO_BTF=n \
             WERROR=0 \
             KCFLAGS="-w"
 
@@ -57,13 +52,13 @@ jobs:
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
           else
-            gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image.gz || cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Final.zip *
+          zip -r9 ../Kernel-A14-Samsung.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-A14-Pronto
-          path: Kernel-A14-Final.zip
+          path: Kernel-A14-Samsung.zip
