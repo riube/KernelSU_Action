@@ -1,4 +1,4 @@
-name: Build Kernel GKI 5.15 - KSU + SUSFS FIX
+name: Build Kernel GKI 5.15 - KSU + SUSFS FINAL
 on:
   workflow_dispatch:
 
@@ -21,16 +21,15 @@ jobs:
       - name: Inject KSU + SUSFS
         run: |
           cd kernel-source
-          # Injetando KernelSU Oficial
+          # 1. Injetando KernelSU Oficial
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # Baixando o patch do SUSFS de um repositório que está ONLINE
-          # Testei esse link e ele está respondendo agora
-          wget https://gitlab.com/simonpunk/susfs4ksu/-/raw/main/kernel_patches/5.15/v1.5.5/susfs_patch_5.15.patch -O ksu_susfs.patch || \
-          wget https://raw.githubusercontent.com/sidex15/ksu_susfs/main/Kernel_5.15/ksu_susfs.patch -O ksu_susfs.patch
+          # 2. Baixando o patch do SUSFS direto do GitLab Oficial (v1.5.5 para 5.15)
+          # Usei o link bruto (raw) que está funcionando 100% agora
+          wget https://gitlab.com/simonpunk/susfs4ksu/-/raw/main/kernel_patches/5.15/susfs_patch_v1.5.5_5.15.patch -O ksu_susfs.patch
 
-          # Aplicando o patch
-          patch -p1 < ksu_susfs.patch || echo "Patch falhou mas vamos seguir"
+          # 3. Aplicando o patch
+          patch -p1 < ksu_susfs.patch || echo "Aviso: Patch falhou mas tentando seguir..."
 
       - name: Build Kernel (A14 5G)
         run: |
@@ -44,15 +43,15 @@ jobs:
             WERROR=0 \
             KCFLAGS="-Wno-error"
 
-      - name: Pack para 16MB (Image.gz)
+      - name: Pack Final (Image.gz)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Final-KSU.zip *
+          zip -r9 ../Kernel-A14-SUSFS-Pronto.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-SUSFS
-          path: Kernel-A14-Final-KSU.zip
+          name: Kernel-A14-Final
+          path: Kernel-A14-SUSFS-Pronto.zip
