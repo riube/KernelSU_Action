@@ -12,34 +12,32 @@ jobs:
       - name: Instalar Ferramentas de Compilação
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf aarch64-linux-gnu-gcc
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Baixar Kernel Original (Link Direto)
+      - name: Baixar Kernel Original
         run: |
-          # Usando seu link do Limewire para baixar os 256MB reais
           curl -L "https://limewire.com/d/h1JDt" -o kernel.tar.gz
           tar -xf kernel.tar.gz
-          echo "Download concluído. Verificando pasta do kernel..."
-          ls -R | grep -m 1 "Makefile"
+          echo "Kernel extraído com sucesso!"
 
-      - name: Injetar KernelSU Next
+      - name: Configurar KernelSU Next
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Disfarce)
+      - name: Aplicar Patches SUSFS
         run: |
           git clone https://gitlab.com/burasaka/susfs4kernel.git
-          # Aplicando patches para a base 5.15 do seu A14
+          # Aplicando patches para a base 5.15
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel (Vacina Anti-Erro 12min)
+      - name: Compilar Kernel
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           
-          # DESATIVA O BTF: Isso impede que a build trave na metade
+          # Desativar BTF para não travar nos 12 minutos
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           
           make O=out -j$(nproc)
@@ -47,14 +45,14 @@ jobs:
       - name: Gerar Arquivo Final
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image ./Image-A14-Final-KSU-Next
+            cp out/arch/arm64/boot/Image ./Image-A14-Final-Diego
           else
-            echo "Erro: A compilação falhou. Verifique os logs acima."
+            echo "Erro: Arquivo Image não encontrado."
             exit 1
           fi
 
-      - name: Enviar Kernel Pronto
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A15-Diego
-          path: ./Image-A14-Final-KSU-Next
+          name: Kernel-A15-Diego-Pronto
+          path: ./Image-A14-Final-Diego
