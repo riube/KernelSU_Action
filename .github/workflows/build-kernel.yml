@@ -19,46 +19,45 @@ jobs:
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
           tar -xf kernel.tar.gz
 
-      - name: Configurar KernelSU Next + SUSFS Integrado
+      - name: Injetar KernelSU Next
         run: |
-          # Usando o instalador oficial que já traz o suporte necessário
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+
+      - name: Aplicar Patches SUSFS (Link Oficial GitLab)
+        run: |
+          # Clonando do GitLab que é a fonte mais estável para o SUSFS
+          git clone https://gitlab.com/cyluun/susfs4kernel.git
           
-          # Baixando os patches do SUSFS diretamente de onde o KSU recomenda
-          git clone https://github.com/kernelsu/susfs4kernel.git || wget https://github.com/kernelsu/susfs4kernel/archive/refs/heads/main.zip
-          
-          # Se baixou o zip, extrai; se clonou, entra na pasta
-          if [ -f main.zip ]; then unzip main.zip && mv susfs4kernel-main susfs4kernel; fi
-          
+          # Aplicando na base 5.15 do seu A14
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel (Foco no A14 5G)
+      - name: Compilar Kernel (A14 5G - Android 15)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           
-          # Vacina do BTF e Compressão para o seu init_boot de 16MB
+          # Vacina para não travar e compressão para o seu init_boot de 16MB
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
           make O=out -j$(nproc)
 
-      - name: Gerar Imagem Final
+      - name: Gerar Arquivos para Flash
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
             cp out/arch/arm64/boot/Image ./Image-A14-GKI
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: A compilação falhou."
+            echo "Erro na compilação. Veja os logs acima."
             exit 1
           fi
 
-      - name: Upload
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Android15-initboot
+          name: Kernel-A14-Android15-Diego
           path: |
             ./Image-A14-GKI
             ./Image.lz4
