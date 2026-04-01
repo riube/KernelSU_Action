@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G OFICIAL
+name: Build Kernel A14 5G 100% Funcional
 on:
   workflow_dispatch:
 
@@ -14,24 +14,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git clang lld
 
-      - name: Download Kernel (Samsung Open Source Oficial)
+      - name: Download Kernel (Link Publico Garantido)
         run: |
-          # Baixando direto do espelho público oficial para o A146M
-          git clone --depth=1 https://github.com/Samsung-A14x/android_kernel_samsung_a14x kernel-source
+          # Usando o mirror que nao pede login
+          git clone --depth=1 https://github.com/D-S-Y/android_kernel_samsung_a14x kernel-source
 
       - name: Setup KernelSU & SUSFS
         run: |
           cd kernel-source
-          # Injetando o KernelSU oficial
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          # Adicionando suporte ao SUSFS para passar no Integrity
           wget https://raw.githubusercontent.com/dakkshesh07/php/master/ksu_susfs.patch
           patch -p1 < ksu_susfs.patch || true
 
-      - name: Build Kernel (Configurado para 16MB)
+      - name: Build Kernel (Fix 16MB Image)
         run: |
           cd kernel-source
-          # Usando a config oficial do A14 5G
           make ARCH=arm64 O=out a14x_eur_open_defconfig
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
@@ -43,13 +40,12 @@ jobs:
       - name: Pack AnyKernel3
         run: |
           git clone https://github.com/osm0sis/AnyKernel3
-          # Aqui está o segredo: Image.gz é o que faz caber nos seus 16MB
           cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Android15-KSU-SUSFS.zip *
+          zip -r9 ../Kernel-A14-Android15-KSU.zip *
 
       - name: Upload Final
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Pronto
-          path: Kernel-A14-Android15-KSU-SUSFS.zip
+          name: Kernel-A14-Final
+          path: Kernel-A14-Android15-KSU.zip
