@@ -23,22 +23,25 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Link que funcionou)
+      - name: Aplicar Patches SUSFS (Download Direto do ZIP)
         run: |
-          # Usando o link que a gente usou na build de 20 minutos
-          git clone https://github.com/tiann/susfs4kernel.git
+          # Baixando o ZIP do SUSFS para não pedir senha de Git nunca mais
+          wget https://github.com/tiann/susfs4kernel/archive/refs/heads/main.zip -O susfs.zip
+          unzip susfs.zip
+          mv susfs4kernel-main susfs4kernel
+          
+          # Aplicando patches na base 5.15
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel (Otimizado A14)
+      - name: Compilar Kernel (A14 5G)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           
-          # Desativa o BTF para não dar erro de espaço
+          # Desativa o BTF e força LZ4 para o seu init_boot de 16MB
           scripts/config --file out/.config -d DEBUG_INFO_BTF
-          # Força a compressão LZ4 para caber no seu init_boot
           scripts/config --file out/.config -e KERNEL_LZ4
           
           make O=out -j$(nproc)
@@ -49,11 +52,11 @@ jobs:
             cp out/arch/arm64/boot/Image ./Image-A14-GKI
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: A compilação falhou."
+            echo "Erro na compilação."
             exit 1
           fi
 
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-A14-Android15-Diego
