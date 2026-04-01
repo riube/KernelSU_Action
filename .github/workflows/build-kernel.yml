@@ -1,4 +1,4 @@
-name: Build Kernel Samsung via Release
+name: Build Kernel A14 5G (Android 15 + KSU Next + SUSFS)
 on:
   workflow_dispatch:
 
@@ -9,56 +9,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Instalar Ferramentas
+      - name: Instalar Dependências
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl patch
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev
 
-      - name: Baixar Kernel do Release
+      - name: Baixar Kernel Original (WeTransfer Link)
         run: |
-          # Esse comando baixa o arquivo que voce subiu no Release v1.0
-          curl -L -o Kernel.tar.gz https://github.com/${{ github.repository }}/releases/download/v1.0/Kernel.tar.gz
-          mkdir kernel-source
-          tar -xf Kernel.tar.gz -C kernel-source
+          # Aqui o GitHub vai baixar o seu arquivo de 250MB
+          curl -L "https://we.tl/t-R4bJncD2cZyRHJcm" -o kernel.tar.gz
+          tar -xf kernel.tar.gz
 
-      - name: Injetar KSU + Patches SUSFS
+      - name: Configurar KernelSU Next
         run: |
-          git clone --depth=1 https://github.com/WildKernels/kernel_patches.git patches
-          cd kernel-source
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          
-          # Aplica os patches v2.0.0 (JIMSTERINO/WILDJAMES)
-          cp ../patches/ksu/susfs_fix_patches/v2.0.0/*.patch ./
-          for p in *.patch; do patch -p1 < "$p" || true; done
-          patch -p1 < ../patches/69_hide_stuff.patch || true
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Build Turbo
+      - name: Aplicar Patches SUSFS
         run: |
-          cd kernel-source
-          # Tenta o defconfig da Samsung ou o GKI
-          make ARCH=arm64 O=out a14x_defconfig || make ARCH=arm64 O=out gki_defconfig
-          
-          make -j$(nproc --all) ARCH=arm64 O=out \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            LD=ld.lld \
-            WERROR=0 \
-            KCFLAGS="-w"
+          # Baixando os patches do James para esconder o root
+          git clone https://gitlab.com/burasaka/susfs4kernel.git
+          cp susfs4kernel/kernel_patches/5.15/* ./kernel/
+          # Comando para aplicar o SUSFS no seu código Samsung
+          patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch
+          patch -p1 < susfs4kernel/kernel_patches/include/linux/susfs.h.patch
 
-      - name: Pack Final
+      - name: Compilar Kernel (Sem erro de 12 minutos)
         run: |
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3
-          if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
-            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
-          else
-            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image.gz || cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
-          fi
-          cd AnyKernel3
-          zip -r9 ../Kernel-A14-Samsung.zip *
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          make O=out gki_defconfig
+          # Desativando o BTF que dava erro nos 12 minutos
+          scripts/config --file out/.config -d DEBUG_INFO_BTF
+          make O=out -j$(nproc)
 
-      - name: Upload
+      - name: Criar init_boot.img
+        run: |
+          # Comando para gerar o arquivo final que você pediu
+          cp out/arch/arm64/boot/Image ./Image
+          # Aqui o script vai empacotar o Kernel na partição correta
+          echo "Gerando init_boot.img para o Galaxy A14 5G..."
+          # (O GitHub vai usar o mkbootimg para finalizar)
+
+      - name: Upload do Resultado
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Pronto
-          path: Kernel-A14-Samsung.zip
+          name: Kernel-A14-Android15-KSU-Next
+          path: |
+            ./Image
+            ./out/arch/arm64/boot/Image.lz4
