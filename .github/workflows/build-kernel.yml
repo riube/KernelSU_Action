@@ -9,16 +9,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Configuration
-        run: |
-          echo "SOURCE_URL=$(grep KERNEL_SOURCE config.env | cut -d'=' -f2)" >> $GITHUB_ENV
-          echo "SOURCE_BRANCH=$(grep KERNEL_SOURCE_BRANCH config.env | cut -d'=' -f2)" >> $GITHUB_ENV
-          echo "CONFIG_FILE=$(grep KERNEL_CONFIG config.env | cut -d'=' -f2)" >> $GITHUB_ENV
-
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git
 
       - name: Download Clang (ZyCromerZ)
         run: |
@@ -29,7 +23,7 @@ jobs:
 
       - name: Checkout Kernel Source
         run: |
-          git clone --depth=1 -b ${{ env.SOURCE_BRANCH }} ${{ env.SOURCE_URL }} kernel-source
+          git clone --depth=1 -b u7 https://github.com/HunterGaming1212/android_kernel_samsung_a14x kernel-source
 
       - name: Setup KernelSU & SUSFS
         run: |
@@ -42,7 +36,7 @@ jobs:
         run: |
           cd kernel-source
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-          make ARCH=arm64 O=out ${{ env.CONFIG_FILE }}
+          make ARCH=arm64 O=out a14x_eur_open_defconfig
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CROSS_COMPILE=aarch64-linux-gnu- \
