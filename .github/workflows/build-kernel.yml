@@ -14,11 +14,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git
 
-      - name: Download Clang (ZyCromerZ)
+      - name: Download Clang (AOSP)
         run: |
           mkdir clang
           cd clang
-          wget https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20220904/Clang-14.0.6-20220904.tar.gz
+          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz
           tar -xf *.tar.gz
 
       - name: Checkout Kernel Source
