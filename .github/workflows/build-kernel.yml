@@ -14,38 +14,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Baixar Kernel (O seu de 244MB)
+      - name: Baixar Kernel (244MB do Discord)
         run: |
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
           tar -xf kernel.tar.gz
-          # CORREÇÃO: Move tudo para a raiz caso esteja em uma pasta 'Kernel'
           [ -d "Kernel" ] && mv Kernel/* . || true
 
       - name: Injetar KernelSU Next
         run: |
-          # Rodando o setup direto no kernel extraído
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Sem Erro de Login)
+      - name: Aplicar SUSFS (O JEITO QUE NÃO PEDE SENHA)
         run: |
-          # Usando link do GitHub (Tiann) que não pede senha
-          git clone https://github.com/tiann/susfs4kernel.git
-          cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
-          patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
+          # Criando a pasta na mão
+          mkdir -p fs/susfs
+          # Baixando o código bruto direto do servidor, sem usar 'git clone'
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o fs/susfs/susfs.patch
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
+          
+          # Aplicando os patches no seu kernel 5.15
+          patch -p1 < fs/susfs/susfs.patch || true
+          patch -p1 < sys.patch || true
 
       - name: Compilar Kernel (A Build de 20 Minutos)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          
-          # Gera a config usando o arquivo que está nos seus 244MB
           make O=out gki_defconfig
           
-          # VACINA DOS 20 MINUTOS: Desativa o BTF para o disco não encher e a build terminar
+          # Vacina contra estouro de disco (BTF Off)
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
-          # Inicia a compilação real
           make O=out -j$(nproc)
 
       - name: Gerar Arquivo Final
@@ -60,5 +60,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Diego-OK
+          name: Kernel-A14-Diego-Final
           path: ./Image.lz4
