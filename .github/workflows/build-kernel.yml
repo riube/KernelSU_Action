@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - FIX TOTAL
+name: Build Kernel A14 5G - MODO RESGATE
 on:
   workflow_dispatch:
 
@@ -18,28 +18,29 @@ jobs:
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-5.15 kernel-source
 
-      - name: Inject KSU + Limpeza
+      - name: Inject KernelSU + Patch de Compatibilidade
         run: |
           cd kernel-source
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          # Remove a linha que causou o erro de 21 minutos pra garantir
-          find drivers/kernelsu -type f -exec sed -i '/app_profile.h/d' {} + || true
+          
+          # FIX REAL: O KernelSU novo pede esse diretório uapi. Vamos criar e dar um arquivo vazio pra ele.
+          mkdir -p drivers/kernelsu/uapi
+          echo "/* Empty profile for GKI compatibility */" > drivers/kernelsu/uapi/app_profile.h
+          
+          # Garante que o compilador ache o caminho dos arquivos novos
+          sed -i 's/EXTRA_CFLAGS += -I$(srctree)\/drivers\/kernelsu/EXTRA_CFLAGS += -I$(srctree)\/drivers\/kernelsu -I$(srctree)\/drivers\/kernelsu\/uapi/' drivers/kernelsu/Makefile || true
 
-      - name: Build Kernel (FORÇA BRUTA)
+      - name: Build Kernel (MODO FORÇA BRUTA)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out gki_defconfig
           
-          # AQUI ESTÁ O PULO DO GATO:
-          # headers_install=0 e KBUILD_CC_WITH_CHECK=0 matam o erro do seu print
+          # Voltando aos comandos que deixam a build correr solta
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
-            KBUILD_CC_WITH_CHECK=0 \
-            headers_install=0 \
-            CHECK_HEADERS=0 \
             WERROR=0 \
             KCFLAGS="-Wno-error -w" \
             KBUILD_CFLAGS="-Wno-error -w"
@@ -47,17 +48,17 @@ jobs:
       - name: Pack Final (Image.gz)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
-          # Verifica se o arquivo foi gerado e prepara o zip
+          # Se chegar aqui, a build foi um sucesso
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
-          elif [ -f kernel-source/out/arch/arm64/boot/Image ]; then
+          else
             gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Final.zip *
+          zip -r9 ../Kernel-A14-GKI-KSU.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Resultado
-          path: Kernel-A14-Final.zip
+          name: Kernel-A14-Final
+          path: Kernel-A14-GKI-KSU.zip
