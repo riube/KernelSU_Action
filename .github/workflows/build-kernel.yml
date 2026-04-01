@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - MODO WILD
+name: Build Kernel A14 5G - SEM ERRO BTF
 on:
   workflow_dispatch:
 
@@ -9,46 +9,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Install Tools (KIT COMPLETO)
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl patch
-
+          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl patch libcap-dev
+          
       - name: Download Kernel (Base 5.15-android13)
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android13-5.15 kernel-source
 
-      - name: Aplicar Patches da WildKernels
+      - name: Aplicar KSU + WildKernels
         run: |
-          # 1. Clona o repo exato do seu print
           git clone --depth=1 https://github.com/WildKernels/kernel_patches.git wild_patches
-          
           cd kernel-source
-          # 2. Injeta o KernelSU
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # 3. Aplica os patches da pasta v2.0.0 que voce mostrou no print
-          # Esses resolvem o erro de 20 minutos (app_profile, klog, etc)
+          # Aplica os patches do seu print
           cp ../wild_patches/ksu/susfs_fix_patches/v2.0.0/*.patch ./
           for p in *.patch; do patch -p1 < "$p" || true; done
-          
-          # 4. Aplica o patch principal de ocultação
           patch -p1 < ../wild_patches/69_hide_stuff.patch || true
           
-          # 5. Mata o fiscal de 30 segundos (HDRTEST)
+          # Mata o fiscal de 30 segundos e desativa o BTF que deu erro no print
           sed -i '/PHONY += headers_check/d' Makefile || true
           sed -i '/scripts\/Makefile.headersinst/d' Makefile || true
+          # Desativa o gerador de BTF para nao travar no 'resolve_btfids'
+          sed -i 's/CONFIG_DEBUG_INFO_BTF=y/CONFIG_DEBUG_INFO_BTF=n/g' arch/arm64/configs/gki_defconfig || true
 
-      - name: Build Real (KSU + SUSFS)
+      - name: Build Turbo (Sem Travas)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out gki_defconfig
+          
+          # Forçando a desativação do BTF no comando de build também
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
             KBUILD_CC_WITH_CHECK=0 \
+            CONFIG_DEBUG_INFO_BTF=n \
             WERROR=0 \
             KCFLAGS="-w"
 
@@ -61,10 +60,10 @@ jobs:
             gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Wild.zip *
+          zip -r9 ../Kernel-A14-Final.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-A14-Pronto
-          path: Kernel-A14-Wild.zip
+          path: Kernel-A14-Final.zip
