@@ -12,7 +12,7 @@ jobs:
       - name: Instalar Ferramentas
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
+          sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu wget unzip
 
       - name: Baixar Kernel (Discord Direct)
         run: |
@@ -23,10 +23,14 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (O MESMO DE ANTES)
+      - name: Aplicar Patches SUSFS (MODO ZIP - SEM LOGIN)
         run: |
-          # Clonando exatamente como estava na build de 20 minutos
-          git clone https://gitlab.com/cyluun/susfs4kernel.git
+          # Baixando o ZIP do Tiann (que é o que funciona) direto para evitar erro de Username
+          wget https://github.com/tiann/susfs4kernel/archive/refs/heads/main.zip -O susfs.zip
+          unzip susfs.zip
+          mv susfs4kernel-main susfs4kernel
+          
+          # Aplicando os patches na base 5.15 do seu A14
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
