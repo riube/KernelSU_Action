@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G ZIP-Method
+name: Build Kernel A14 5G - FINAL
 on:
   workflow_dispatch:
 
@@ -6,7 +6,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
       - name: Install Build Dependencies
@@ -14,21 +14,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git clang lld
 
-      - name: Download Kernel (Direct ZIP)
+      - name: Download Kernel (Metodo Direto - SEM SENHA)
         run: |
-          # Baixando como ZIP para ignorar erro de Username/Senha
-          wget https://github.com/D-S-Y/android_kernel_samsung_a14x/archive/refs/heads/u7.zip
-          unzip u7.zip
-          mv android_kernel_samsung_a14x-u7 kernel-source
+          # Baixando o arquivo bruto para nao pedir login/senha
+          curl -L https://github.com/carlosedp/android_kernel_samsung_a14x/archive/refs/heads/master.tar.gz -o kernel.tar.gz
+          mkdir kernel-source
+          tar -xzf kernel.tar.gz -C kernel-source --strip-components=1
 
       - name: Setup KernelSU & SUSFS
         run: |
           cd kernel-source
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          wget https://raw.githubusercontent.com/dakkshesh07/php/master/ksu_susfs.patch
+          # Patch do SUSFS direto da fonte estavel
+          wget https://raw.githubusercontent.com/sidex15/ksu_susfs/main/ksu_susfs.patch
           patch -p1 < ksu_susfs.patch || true
 
-      - name: Build Kernel (Fix 16MB Image)
+      - name: Build Kernel (Configurado para 16MB)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out a14x_eur_open_defconfig
@@ -41,13 +42,13 @@ jobs:
 
       - name: Pack Result
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-KSU-Final.zip *
+          zip -r9 ../Kernel-A14-KSU.zip *
 
-      - name: Upload Final
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14
-          path: Kernel-A14-KSU-Final.zip
+          name: Kernel-A14-Pronto
+          path: Kernel-A14-KSU.zip
