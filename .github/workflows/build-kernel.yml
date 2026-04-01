@@ -14,45 +14,54 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Baixar Kernel Original
+      - name: Baixar Kernel Original (Discord Direct)
         run: |
-          curl -L "https://limewire.com/d/h1JDt" -o kernel.tar.gz
+          # Baixando os 244MB reais do seu link do Discord
+          curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
+          
+          # Verificação de segurança: Se o arquivo for menor que 10MB, a build para aqui
+          FILESIZE=$(stat -c%s "kernel.tar.gz")
+          if [ $FILESIZE -lt 10000000 ]; then
+            echo "Erro: O download falhou ou o link expirou. Tamanho baixado: $FILESIZE bytes."
+            exit 1
+          fi
+          
           tar -xf kernel.tar.gz
-          echo "Kernel extraído com sucesso!"
+          echo "Kernel de 244MB extraído com sucesso!"
 
-      - name: Configurar KernelSU Next
+      - name: Injetar KernelSU Next
         run: |
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
       - name: Aplicar Patches SUSFS
         run: |
           git clone https://gitlab.com/burasaka/susfs4kernel.git
-          # Aplicando patches para a base 5.15
+          # Aplicando patches para a base 5.15 do A14
           cp susfs4kernel/kernel_patches/5.15/* ./kernel/ || true
           patch -p1 < susfs4kernel/kernel_patches/fs/susfs.patch || true
 
-      - name: Compilar Kernel
+      - name: Compilar Kernel (Sem erro de 12min)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make O=out gki_defconfig
           
-          # Desativar BTF para não travar nos 12 minutos
+          # Desativa o BTF para garantir que a build termine
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           
           make O=out -j$(nproc)
 
-      - name: Gerar Arquivo Final
+      - name: Gerar Arquivo Image
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image ./Image-A14-Final-Diego
+            cp out/arch/arm64/boot/Image ./Image-A14-KSU-Next-Final
           else
-            echo "Erro: Arquivo Image não encontrado."
+            echo "Erro: A compilação falhou."
             exit 1
           fi
 
-      - name: Upload
+      - name: Enviar Kernel Pronto
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A15-Diego-Pronto
-          path: ./Image-A14-Final-Diego
+          name: Kernel-A15-Pronto
+          path: ./Image-A14-KSU-Next-Final
