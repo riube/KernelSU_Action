@@ -14,60 +14,53 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu
 
-      - name: Extração Forçada (Resolve Erro de Pasta)
+      - name: Extração do Kernel (244MB)
         run: |
-          # Baixa o seu kernel de 244MB
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
+          # Extrai e força tudo que está na pasta 'Kernel' para a raiz
           tar -xf kernel.tar.gz
-          
-          # Acha onde está o Makefile e joga TUDO na raiz pra não dar erro de config
-          K_DIR=$(find . -maxdepth 3 -name "Makefile" -exec dirname {} \; | head -n 1)
-          mv $K_DIR/* . || true
+          cp -r Kernel/* . || true
+          rm -rf Kernel
 
       - name: Injetar KernelSU Next
         run: |
-          # Setup via RAW (Sem git clone)
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar SUSFS (Sem Erro de Login - 100% RAW)
+      - name: Aplicar SUSFS (RAW - Sem Login)
         run: |
-          # Resolve o erro do print 9efb84 (NUNCA mais usa git clone aqui)
           mkdir -p fs/susfs
+          # Puxando os arquivos sem usar 'git clone' para não pedir senha
           curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o fs/susfs/susfs.patch
-          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
+          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys_patch.patch
           
           patch -p1 < fs/susfs/susfs.patch || true
-          patch -p1 < sys.patch || true
+          patch -p1 < sys_patch.patch || true
 
-      - name: Compilar Kernel (A Build de 20 Minutos - Sem Erro de Disco)
+      - name: Compilar Kernel (FIX FINAL)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Limpa build anterior se houver
-          make clean && make mrproper
+          # Não usa find, usa o caminho direto que o Android 15 exige
+          make O=out gki_defconfig
           
-          # Acha a config exata dentro da pasta arch
-          CONF=$(find arch/arm64/configs/ -name "gki_defconfig" | head -n 1)
-          make O=out $(basename $CONF)
-          
-          # VACINA DOS 20 MINUTOS: Desativa o BTF pra build não morrer por falta de espaço
+          # Vacina contra os 20 minutos (estouro de disco)
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
           make O=out -j$(nproc)
 
-      - name: Gerar Arquivo Image
+      - name: Gerar Image
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: A compilação falhou nos drivers."
+            echo "Erro crítico: A compilação falhou."
             exit 1
           fi
 
       - name: Enviar Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Diego-Final-OK
+          name: Kernel-A14-Diego-Final
           path: ./Image.lz4
