@@ -14,65 +14,55 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison lz4 libssl-dev libelf-dev libncurses-dev gperf gcc-aarch64-linux-gnu wget unzip
 
-      - name: Baixar e Organizar Kernel
+      - name: Download e Unificação Total
         run: |
-          # Baixa o seu Kernel de 244MB
+          # Baixa o kernel de 244MB
           curl -L "https://cdn.discordapp.com/attachments/1485446205118091346/1488837735320915998/Kernel.tar.gz?ex=69ce3bb1&is=69ccea31&hm=d6f4b6aa6928bdefec763a8c3507122b0522674f64b4367efdd15c4e60e45edc&" -o kernel.tar.gz
+          tar -xf kernel.tar.gz
           
-          # Extrai tudo em uma pasta temporária e move tudo para a raiz
-          mkdir temp_kernel
-          tar -xf kernel.tar.gz -C temp_kernel
-          cp -r temp_kernel/* . || true
-          # Se houver uma pasta interna com nome de 'Kernel', move o que tem dentro dela também
-          find . -maxdepth 3 -name "gki_defconfig"
-          
+          # Mover TUDO de qualquer subpasta para a raiz do projeto
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          echo "Arquivos unificados na raiz."
+
       - name: Injetar KernelSU Next
         run: |
+          # Como unificamos, o setup roda direto aqui
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
 
-      - name: Aplicar Patches SUSFS (Via Raw - Sem Login)
+      - name: SUSFS via ZIP (Sem erro de Login)
         run: |
-          mkdir -p fs/susfs
-          # Puxando os arquivos brutos para não dar erro de Username no Git
-          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/fs/susfs.patch" -o susfs.patch
-          curl -LSs "https://raw.githubusercontent.com/sidex15/susfs4kernel/main/kernel_patches/5.15/sys_patch_5.15.patch" -o sys.patch
-          patch -p1 < susfs.patch || true
-          patch -p1 < sys.patch || true
+          # Wget não pede senha, resolvendo os erros das imagens 9e7ee4 e 9e89f0
+          wget https://github.com/sidex15/susfs4kernel/archive/refs/heads/main.zip -O susfs.zip
+          unzip susfs.zip
+          cp -r susfs4kernel-main/kernel_patches/* .
+          # Aplica o patch de integridade
+          patch -p1 < fs/susfs.patch || true
 
-      - name: Compilar Kernel (Agora Vai!)
+      - name: Compilar (A14 5G - Sem Erro de Pasta)
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Procura onde o gki_defconfig foi parar e usa o caminho real
-          CONFIG_PATH=$(find . -name "gki_defconfig" | head -n 1)
-          CONFIG_FILE=$(basename $CONFIG_PATH)
-          CONFIG_DIR=$(dirname $CONFIG_PATH)
+          # Agora ele acha o gki_defconfig porque está na raiz
+          make O=out gki_defconfig
           
-          echo "Usando config em: $CONFIG_PATH"
-          
-          make O=out ARCH=arm64 $CONFIG_FILE
-          
-          # A vacina dos 20 minutos
+          # Vacina contra o erro dos 20 minutos (estouro de disco)
           scripts/config --file out/.config -d DEBUG_INFO_BTF
           scripts/config --file out/.config -e KERNEL_LZ4
           
-          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
+          make O=out -j$(nproc)
 
-      - name: Gerar Arquivos para Flash
+      - name: Gerar Image
         run: |
           if [ -f out/arch/arm64/boot/Image ]; then
-            cp out/arch/arm64/boot/Image ./Image-Final
             lz4 -f -l out/arch/arm64/boot/Image ./Image.lz4
           else
-            echo "Erro: A compilação não gerou a Image."
+            echo "Falha crítica: O kernel não compilou."
             exit 1
           fi
 
-      - name: Upload
+      - name: Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-Diego-Pronto
-          path: |
-            ./Image-Final
-            ./Image.lz4
+          name: Kernel-A14-Diego-Final
+          path: ./Image.lz4
