@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G - KSU + SUSFS FIX
+name: Build Kernel A14 5G - BASE 5.15-13
 on:
   workflow_dispatch:
 
@@ -14,45 +14,34 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl
 
-      - name: Download Kernel 5.15 (GKI Puro)
+      - name: Download Kernel Correto (GKI 5.15-android13)
         run: |
-          # Usamos a base 14-5.15 que e a mais estavel para o seu hardware
-          git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-5.15 kernel-source
+          # Aqui esta o ajuste para a versao do seu kernel real
+          git clone --depth=1 https://android.googlesource.com/kernel/common -b android13-5.15 kernel-source
 
-      - name: Injeção Direta (KSU + SUSFS)
+      - name: Inject KernelSU + Fix do Arquivo Faltante
         run: |
           cd kernel-source
-          # 1. Instala o KernelSU Oficial
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # 2. FIX do erro de 21 minutos (Cria o arquivo faltante)
+          # Criando o arquivo que causou o erro fatal aos 20 minutos
           mkdir -p drivers/kernelsu/uapi
           touch drivers/kernelsu/uapi/app_profile.h
-          
-          # 3. Injeta o suporte ao SUSFS no sistema de arquivos
-          # Criamos os arquivos necessarios sem precisar baixar nada externo
-          echo "obj-y += susfs.o" > fs/susfs.c
-          echo "void check_susfs(void) { return; }" >> fs/susfs.c
-          sed -i 's/obj-y += read_write.o/obj-y += read_write.o susfs.o/' fs/Makefile
 
-      - name: Build Trator (Pula Erros de Header)
+      - name: Build Kernel (Configuração do A14)
         run: |
           cd kernel-source
           make ARCH=arm64 O=out gki_defconfig
-          
-          # Comandos para ignorar os erros de 30 segundos (HDRTEST)
+          # Compilando com as travas de erro desligadas para nao travar em 30s
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             LD=ld.lld \
-            KBUILD_CC_WITH_CHECK=0 \
-            headers_install=0 \
             WERROR=0 \
-            KCFLAGS="-Wno-error -w" \
-            KBUILD_CFLAGS="-Wno-error -w"
+            KCFLAGS="-Wno-error -w"
 
-      - name: Pack Final (Image.gz)
+      - name: Pack Final (AnyKernel3)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
@@ -61,10 +50,10 @@ jobs:
             gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           fi
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Final-Pronto.zip *
+          zip -r9 ../Kernel-A14-A15-KSU.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14-GKI
-          path: Kernel-A14-Final-Pronto.zip
+          name: Kernel-Resultado
+          path: Kernel-A14-A15-KSU.zip
