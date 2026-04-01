@@ -1,4 +1,4 @@
-name: Build Kernel A14 5G Samsung Oficial
+name: Build Kernel Direto do KSU
 on:
   workflow_dispatch:
 
@@ -9,43 +9,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies
+      - name: Install Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 python-is-python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi wget git clang lld
+          sudo apt-get install -y bc build-essential bison flex libssl-dev libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi clang lld curl
 
-      - name: Download Kernel Source (Samsung Oficial)
+      - name: Download GKI Kernel (Fonte Oficial 5.15)
         run: |
-          # Baixando o codigo direto do servidor publico da Samsung
-          git clone --depth=1 https://github.com/Samsung-A14x/android_kernel_samsung_a14x kernel-source
+          # Baixando a base 5.15 direto do Google/Android (Link que nunca cai)
+          git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-5.15 kernel-source
 
-      - name: Setup KernelSU & SUSFS
+      - name: Inject KernelSU (Oficial)
         run: |
           cd kernel-source
+          # Comando oficial do site do KernelSU para injetar o codigo
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          wget https://raw.githubusercontent.com/sidex15/ksu_susfs/main/ksu_susfs.patch
-          patch -p1 < ksu_susfs.patch || true
 
-      - name: Build Kernel (Configuracao Nativa)
+      - name: Build Kernel (A14 5G)
         run: |
           cd kernel-source
-          make ARCH=arm64 O=out a14x_eur_open_defconfig
+          # Usando a config padrao para kernel 5.15
+          make ARCH=arm64 O=out gki_defconfig
           make -j$(nproc --all) ARCH=arm64 O=out \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             LD=ld.lld
 
-      - name: Pack Final (Image.gz)
+      - name: Pack Image.gz (Para 16MB)
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3
-          cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
+          # Comprimindo para Image.gz para caber na sua particao
+          gzip -c kernel-source/out/arch/arm64/boot/Image > AnyKernel3/Image.gz
           cd AnyKernel3
-          zip -r9 ../Kernel-A14-Android15-Pronto.zip *
+          zip -r9 ../Kernel-KSU-Oficial.zip *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-A14
-          path: Kernel-A14-Android15-Pronto.zip
+          name: Kernel-A14-KSU
+          path: Kernel-KSU-Oficial.zip
